@@ -100,12 +100,12 @@ npm run test
 npm run test:all
 
 # Run a specific test file
-k6 run tests/performance/your-test.js
+k6 run tests/your-test.js
 ```
 
 ### Test Configuration
 
-Tests are located in the `tests/performance/` directory. Each test file should:
+Tests are located in the `tests/` directory. Each test file should:
 
 1. Import required K6 modules
 2. Define test configuration and thresholds
@@ -237,10 +237,8 @@ The `docker-compose.yml` file configures:
 monitor-application-performance/
 ├── dashboard/              # Grafana dashboard configurations
 ├── tests/
-│   └── performance/        # K6 test scenarios
-│       ├── lots.js         # Example performance test
-│       ├── api-load-test.js # API load testing
-│       └── stress-test.js  # Stress testing
+│    ├── load-test.js # API load testing
+│    └── stress-test.js  # Stress testing
 ├── heapdumps/             # Heap snapshots (when enabled)
 ├── data/                   # Persistent data storage
 │   ├── grafana/           # Grafana data
@@ -262,11 +260,11 @@ monitor-application-performance/
 | `npm run dev` | Start in development mode with file watching |
 | `npm run test` | Run the default performance test |
 | `npm run test:all` | Run all performance tests |
-| `npm run setup` | Start Docker services |
-| `npm run stop` | Stop Docker services |
-| `npm run logs` | View Docker service logs |
-| `npm run clean` | Clean up all data and containers |
-| `npm run install-k6` | Install K6 globally |
+| `npm run docker:start` | Start Docker services |
+| `npm run docker:stop` | Stop Docker services |
+| `npm run docker:logs` | View Docker service logs |
+| `npm run dockeer:clean` | Clean up all data and containers |
+| `npm run install:k6` | Install K6 globally |
 | `npm run heapdump` | Start with heapdump signal support |
 | `npm run heapdump:manual` | Take manual heap snapshot |
 
@@ -296,7 +294,7 @@ monitor-application-performance/
 
 1. **K6 not found**
    ```bash
-   npm run install-k6
+   npm run install:k6
    ```
 
 2. **Services not starting**
