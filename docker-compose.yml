@@ -1,0 +1,28 @@
+services:
+  grafana:
+    container_name: map-grafana
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+    networks:
+      - bridge
+  influxdb:
+    container_name: map-influxdb_v1
+    image: influxdb:1.8
+    ports:
+      - "8086:8086"
+    environment:
+      INFLUXDB_DB: K6
+      INFLUXDB_ADMIN_USER: administrator
+      INFLUXDB_ADMIN_PASSWORD: administrator
+    volumes:
+      - ./data/influxdb:/var/lib/influxdb
+    networks:
+      - bridge
+networks:
+  bridge:
+    driver: bridge
