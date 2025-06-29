@@ -1,21 +1,23 @@
 # System Patterns
 
 ## Architecture Overview
-The system follows a microservices architecture pattern using Docker containers, with each service having a specific responsibility:
+The system follows a minimal microservices architecture using Docker containers, with each service having a specific responsibility:
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │     K6      │───▶│  InfluxDB   │───▶│   Grafana   │
 │   Tests     │    │   (1.8)     │    │  Dashboard  │
+│ (Global)    │    │             │    │             │
 └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
 ## Key Technical Decisions
 
 ### 1. Containerization Strategy
-- **Docker Compose**: Orchestrates all services in a single configuration
+- **Docker Compose**: Orchestrates Grafana and InfluxDB services
 - **Bridge Network**: Enables inter-service communication
 - **Volume Mounting**: Persists data across container restarts
+- **No Node.js Container**: Eliminated to reduce complexity
 
 ### 2. Database Choice
 - **InfluxDB 1.8**: Time-series database optimized for metrics storage
@@ -26,52 +28,47 @@ The system follows a microservices architecture pattern using Docker containers,
 - **Grafana**: Industry-standard for metrics visualization
 - **Port**: 3000 (accessible at http://localhost:3000)
 - **Admin Password**: "admin"
+- **Pre-configured Dashboards**: Available in dashboard/ directory
 
 ### 4. Performance Testing
 - **K6**: Modern load testing tool with JavaScript-based test scripts
-- **Test Structure**: Modular tests in `tests/performance/` directory
+- **Global Installation**: K6 installed system-wide for maximum compatibility
+- **Test Structure**: Tests stored in `tests/` directory
 - **Configuration**: Environment-based configuration for different targets
 
 ## Design Patterns
 
-### 1. Configuration Pattern
-```javascript
-const configuration = {
-  host: "https://dev.albertinventdev.com",
-  performanceTester: {
-    name: "performanceTester",
-    email: "performanceTester@albertinvent.com",
-    // ... other config
-  }
-};
+### 1. Service Isolation
+```yaml
+services:
+  grafana:
+    container_name: map-grafana
+    # Grafana configuration
+
+  influxdb:
+    container_name: map-influxdb_v1
+    # InfluxDB configuration
 ```
 
-### 2. Test Group Pattern
-```javascript
-group("CREATE", function () {
-  // Test logic for creation operations
-});
-
-group("DELETE", function () {
-  // Test logic for deletion operations
-});
+### 2. Data Persistence
+```yaml
+volumes:
+  - ./data/grafana:/var/lib/grafana
+  - ./data/influxdb:/var/lib/influxdb
 ```
 
-### 3. Threshold Monitoring
-```javascript
-thresholds: {
-  checks: ["rate >= 1.0"],
-  "http_req_duration{group:::CREATE}": ["p(95) < 250"],
-  "http_req_duration{group:::DELETE}": ["p(95) < 250"],
-}
+### 3. Network Configuration
+```yaml
+networks:
+  bridge:
+    driver: bridge
 ```
 
 ## Component Relationships
 
 ### Service Dependencies
-1. **Node.js Container**: Handles npm install and potential future application logic
-2. **InfluxDB**: Receives metrics from K6 tests
-3. **Grafana**: Reads from InfluxDB to display dashboards
+1. **InfluxDB**: Receives metrics from K6 tests
+2. **Grafana**: Reads from InfluxDB to display dashboards
 
 ### Data Flow
 1. K6 tests execute against target applications
@@ -88,3 +85,13 @@ thresholds: {
 - **Horizontal Scaling**: Multiple K6 instances can run simultaneously
 - **Data Retention**: InfluxDB handles time-series data efficiently
 - **Dashboard Sharing**: Grafana supports multiple users and dashboards
+
+## File Organization
+```
+monitor-application-performance/
+├── dashboard/              # Pre-configured Grafana dashboards
+├── tests/                  # K6 test scenarios
+├── data/                   # Persistent data storage
+├── docker-compose.yml      # Service orchestration
+└── README.md              # Documentation
+```

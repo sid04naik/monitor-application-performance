@@ -1,6 +1,6 @@
 # Monitor Application Performance
 
-A local performance monitoring solution designed to test application performance on a local machine and visualize results through a Grafana dashboard.
+A lightweight local performance monitoring solution designed to test application performance on a local machine and visualize results through a Grafana dashboard. The system uses Docker Compose to orchestrate Grafana and InfluxDB services, with K6 installed globally for performance testing.
 
 ## 🚀 Features
 
@@ -10,7 +10,7 @@ A local performance monitoring solution designed to test application performance
 - **Easy Setup**: One-command Docker Compose setup
 - **Custom Scenarios**: Support for custom K6 test scenarios
 - **Local Development**: Complete local environment for performance testing
-- **Memory Profiling**: Heap snapshots for debugging memory issues
+- **Minimal Dependencies**: No Node.js runtime required, only Docker and K6
 
 ## 🏗️ Architecture
 
@@ -18,60 +18,88 @@ A local performance monitoring solution designed to test application performance
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │     K6      │───▶│  InfluxDB   │───▶│   Grafana   │
 │   Tests     │    │   (1.8)     │    │  Dashboard  │
+│ (Global)    │    │             │    │             │
 └─────────────┘    └─────────────┘    └─────────────┘
-         │
-         ▼
-┌─────────────┐
-│  Heapdump   │
-│  Snapshots  │
-└─────────────┘
 ```
 
 ## 📋 Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
-- [Node.js](https://nodejs.org/) (version 22 or higher)
-- [K6](https://k6.io/docs/getting-started/installation/) (for running performance tests)
+- [K6](https://k6.io/docs/getting-started/installation/) (globally installed)
 
 ## 🛠️ Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/sid04naik/monitor-application-performance.git
-   cd monitor-application-performance
-   ```
+### 1. Install K6 Globally
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+**macOS:**
+```bash
+brew install k6
+```
 
-3. **Install K6** (if not already installed)
-   ```bash
-   npm run install-k6
-   ```
+**Ubuntu/Debian:**
+```bash
+sudo gpg -k
+sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+sudo apt-get update
+sudo apt-get install k6
+```
 
-4. **Start the monitoring services**
-   ```bash
-   npm run setup
-   ```
+**Windows:**
+```bash
+choco install k6
+```
+
+### 2. Clone and Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/sid04naik/monitor-application-performance.git
+cd monitor-application-performance
+
+# Start the monitoring services
+docker-compose up -d
+```
 
 ## 🚀 Quick Start
 
-1. **Initialize the system**
+1. **Start Services**
    ```bash
-   npm start
+   docker-compose up -d
    ```
 
-2. **Run performance tests**
-   ```bash
-   npm run test
+2. **Create a Test**
+   Create a K6 test file in the `tests/` directory:
+   ```javascript
+   // tests/example-test.js
+   import http from 'k6/http';
+   import { check, sleep } from 'k6';
+
+   export const options = {
+     vus: 10,
+     duration: '30s',
+     thresholds: {
+       http_req_duration: ['p(95)<500'],
+     },
+   };
+
+   export default function () {
+     const res = http.get('https://httpbin.org/get');
+     check(res, { 'status is 200': (r) => r.status === 200 });
+     sleep(1);
+   }
    ```
 
-3. **View results in Grafana**
+3. **Run Performance Tests**
+   ```bash
+   # Run with InfluxDB output
+   k6 run --out influxdb=http://localhost:8086/k6 tests/example-test.js
+   ```
+
+4. **View Results in Grafana**
    - Open [http://localhost:3000](http://localhost:3000)
    - Login with `admin/admin`
-   - Configure InfluxDB data source (see configuration section)
+   - Import dashboards from the `dashboard/` directory
 
 ## 📊 Services
 
@@ -90,183 +118,49 @@ A local performance monitoring solution designed to test application performance
 
 ## 🧪 Running Tests
 
-### Available Commands
-
+### Basic Test Execution
 ```bash
-# Run the default test scenario
-npm run test
-
-# Run all test scenarios
-npm run test:all
-
-# Run a specific test file
+# Run a test file
 k6 run tests/your-test.js
+
+# Run with InfluxDB output
+k6 run --out influxdb=http://localhost:8086/k6 tests/your-test.js
+
+# Run with multiple outputs
+k6 run --out influxdb=http://localhost:8086/k6 --out json=results.json tests/your-test.js
 ```
 
-### Test Configuration
+### Test Configuration Examples
 
-Tests are located in the `tests/` directory. Each test file should:
-
-1. Import required K6 modules
-2. Define test configuration and thresholds
-3. Implement test scenarios using K6's HTTP client
-
-Example test structure:
+**Load Test:**
 ```javascript
-import http from "k6/http";
-import { check, group, sleep } from "k6";
-
 export const options = {
-  vus: 2,
-  duration: "10s",
+  stages: [
+    { duration: '2m', target: 10 }, // Ramp up
+    { duration: '5m', target: 10 }, // Stay at 10 users
+    { duration: '2m', target: 0 },  // Ramp down
+  ],
   thresholds: {
-    checks: ["rate >= 1.0"],
-    "http_req_duration": ["p(95) < 250"],
+    http_req_duration: ['p(95)<500'],
+    http_req_failed: ['rate<0.1'],
   },
 };
-
-export default function () {
-  // Your test logic here
-}
 ```
 
-## 🔍 Memory Profiling with Heapdump
-
-The application includes heapdump functionality for taking memory snapshots during performance testing.
-
-### Configuration
-
-Add heapdump settings to your `.env` file:
-
-```env
-# Heapdump Configuration
-HEAPDUMP_ENABLED=true
-HEAPDUMP_DIR=heapdumps
-HEAPDUMP_INTERVAL=300
+**Stress Test:**
+```javascript
+export const options = {
+  stages: [
+    { duration: '1m', target: 20 },
+    { duration: '3m', target: 20 },
+    { duration: '1m', target: 50 },
+    { duration: '5m', target: 50 },
+    { duration: '1m', target: 100 },
+    { duration: '3m', target: 100 },
+    { duration: '2m', target: 0 },
+  ],
+};
 ```
-
-### Usage
-
-#### Automatic Snapshots
-- **Pre/Post Test**: Snapshots are automatically taken before and after test execution
-- **Periodic Snapshots**: Set `HEAPDUMP_INTERVAL` for automatic snapshots every N seconds
-- **Signal-based**: Send `SIGUSR2` signal to take snapshots on demand
-
-#### Manual Snapshots
-```bash
-# Take a manual heap snapshot
-npm run heapdump:manual
-
-# Using the standalone tool
-node heapdump-manual.js take
-node heapdump-manual.js take pre-test
-node heapdump-manual.js list
-node heapdump-manual.js clean 7
-```
-
-#### Signal-based Snapshots
-```bash
-# Find the process ID
-ps aux | grep node
-
-# Send SIGUSR2 signal to take snapshot
-kill -USR2 <process_id>
-```
-
-### Analyzing Heap Snapshots
-
-Heap snapshots are saved in the `heapdumps/` directory and can be analyzed using:
-
-1. **Chrome DevTools**:
-   - Open Chrome DevTools
-   - Go to Memory tab
-   - Load the `.heapsnapshot` file
-
-2. **Node.js Inspector**:
-   ```bash
-   node --inspect heapdump-analyzer.js
-   ```
-
-3. **Online Tools**:
-   - [Chrome DevTools Memory Panel](https://developers.google.com/web/tools/chrome-devtools/memory-problems)
-
-### Memory Usage Monitoring
-
-The application logs memory usage when taking snapshots:
-
-```
-💾 Memory usage: {
-  rss: "45MB",
-  heapTotal: "20MB",
-  heapUsed: "15MB",
-  external: "2MB"
-}
-```
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-Create a `.env` file in the root directory:
-
-```env
-# Test Configuration
-TEST_HOST=https://your-api-endpoint.com
-TEST_TOKEN=your-auth-token
-
-# Service Configuration
-GRAFANA_PORT=3000
-INFLUXDB_PORT=8086
-
-# Heapdump Configuration
-HEAPDUMP_ENABLED=true
-HEAPDUMP_DIR=heapdumps
-HEAPDUMP_INTERVAL=300
-```
-
-### Docker Compose Configuration
-
-The `docker-compose.yml` file configures:
-- **Grafana**: Visualization platform
-- **InfluxDB**: Time-series database
-- **Node.js**: Application runtime
-
-## 📁 Project Structure
-
-```
-monitor-application-performance/
-├── dashboard/              # Grafana dashboard configurations
-├── tests/
-│    ├── load-test.js # API load testing
-│    └── stress-test.js  # Stress testing
-├── heapdumps/             # Heap snapshots (when enabled)
-├── data/                   # Persistent data storage
-│   ├── grafana/           # Grafana data
-│   └── influxdb/          # InfluxDB data
-├── log/                   # Application logs
-├── memory-bank/           # Project documentation
-├── docker-compose.yml     # Docker services configuration
-├── index.js              # Main application entry point
-├── heapdump-manual.js    # Standalone heapdump tool
-├── package.json          # Node.js dependencies and scripts
-└── README.md             # This file
-```
-
-## 🔧 Available Scripts
-
-| Script | Description |
-|--------|-------------|
-| `npm start` | Initialize the performance monitoring system |
-| `npm run dev` | Start in development mode with file watching |
-| `npm run test` | Run the default performance test |
-| `npm run test:all` | Run all performance tests |
-| `npm run docker:start` | Start Docker services |
-| `npm run docker:stop` | Stop Docker services |
-| `npm run docker:logs` | View Docker service logs |
-| `npm run dockeer:clean` | Clean up all data and containers |
-| `npm run install:k6` | Install K6 globally |
-| `npm run heapdump` | Start with heapdump signal support |
-| `npm run heapdump:manual` | Take manual heap snapshot |
 
 ## 📈 Setting Up Grafana Dashboards
 
@@ -284,9 +178,40 @@ monitor-application-performance/
      - **User**: `administrator`
      - **Password**: `administrator`
 
-3. **Create Dashboards**
-   - Import dashboard configurations from the `dashboard/` directory
-   - Or create custom dashboards using InfluxDB queries
+3. **Import Pre-configured Dashboards**
+   - Go to Dashboards → Import
+   - Upload dashboard files from the `dashboard/` directory:
+     - `k6-dashboard-1.json`
+     - `K6-dashboard-2.json`
+
+## 📁 Project Structure
+
+```
+monitor-application-performance/
+├── dashboard/              # Pre-configured Grafana dashboards
+│   ├── k6-dashboard-1.json # Comprehensive K6 metrics dashboard
+│   └── K6-dashboard-2.json # Additional K6 dashboard
+├── tests/                  # K6 test scenarios
+│   └── .gitkeep           # Placeholder for test files
+├── data/                   # Persistent data storage
+│   ├── grafana/           # Grafana data
+│   └── influxdb/          # InfluxDB data
+├── log/                   # Application logs
+├── specs/                 # Backup folder (can be ignored)
+├── docker-compose.yml     # Docker services configuration
+└── README.md             # This file
+```
+
+## 🔧 Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `docker-compose up -d` | Start Grafana and InfluxDB services |
+| `docker-compose down` | Stop all services |
+| `docker-compose logs -f` | View service logs |
+| `docker-compose down -v` | Stop services and remove volumes |
+| `k6 run tests/your-test.js` | Run a K6 test |
+| `k6 run --out influxdb=http://localhost:8086/k6 tests/your-test.js` | Run test with InfluxDB output |
 
 ## 🐛 Troubleshooting
 
@@ -294,7 +219,11 @@ monitor-application-performance/
 
 1. **K6 not found**
    ```bash
-   npm run install:k6
+   # Verify K6 installation
+   k6 version
+
+   # Reinstall if needed
+   brew install k6  # macOS
    ```
 
 2. **Services not starting**
@@ -303,7 +232,7 @@ monitor-application-performance/
    docker ps
 
    # View logs
-   npm run logs
+   docker-compose logs
    ```
 
 3. **Port conflicts**
@@ -316,23 +245,11 @@ monitor-application-performance/
    sudo usermod -aG docker $USER
    ```
 
-5. **Heapdump issues**
-   ```bash
-   # Check if heapdump is enabled
-   echo $HEAPDUMP_ENABLED
-
-   # Take manual snapshot
-   npm run heapdump:manual
-
-   # Check heapdump directory
-   ls -la heapdumps/
-   ```
-
 ### Logs and Debugging
 
 ```bash
 # View all service logs
-npm run logs
+docker-compose logs -f
 
 # View specific service logs
 docker-compose logs grafana
@@ -341,8 +258,8 @@ docker-compose logs influxdb
 # Check service status
 docker-compose ps
 
-# Check memory usage
-node heapdump-manual.js take
+# Test InfluxDB connection
+curl http://localhost:8086/ping
 ```
 
 ## 🤝 Contributing
@@ -368,7 +285,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Grafana](https://grafana.com/) - Metrics visualization platform
 - [InfluxDB](https://www.influxdata.com/) - Time-series database
 - [Docker](https://www.docker.com/) - Containerization platform
-- [Heapdump](https://github.com/bnoordhuis/node-heapdump) - Memory profiling
 
 ## 📚 Additional Resources
 
@@ -376,5 +292,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Grafana Documentation](https://grafana.com/docs/)
 - [InfluxDB Documentation](https://docs.influxdata.com/)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
-- [Node.js Memory Profiling](https://nodejs.org/en/docs/guides/memory-profiling/)
-- [Chrome DevTools Memory](https://developers.google.com/web/tools/chrome-devtools/memory-problems)
+- [K6 Installation Guide](https://k6.io/docs/getting-started/installation/)
